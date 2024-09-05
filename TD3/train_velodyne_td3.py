@@ -118,7 +118,7 @@ class TD3(object):
         state = torch.Tensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    # 训练周期
+    # training cycle with additional detailed print statements
     def train(
         self,
         replay_buffer,
@@ -126,7 +126,7 @@ class TD3(object):
         batch_size=100,
         discount=1,
         tau=0.005,
-        policy_noise=0.2,  # 折扣系数
+        policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2,
     ):
@@ -142,42 +142,73 @@ class TD3(object):
                 batch_dones,
                 batch_next_states,
             ) = replay_buffer.sample_batch(batch_size)
+            
+            # 将采样的状态、动作、奖励、下一状态和done打印出来
+            print(f"Batch {it}, Sampled States: {batch_states}")
+            print(f"Batch {it}, Sampled Actions: {batch_actions}")
+            print(f"Batch {it}, Sampled Rewards: {batch_rewards}")
+            print(f"Batch {it}, Sampled Next States: {batch_next_states}")
+            print(f"Batch {it}, Sampled Dones: {batch_dones}")
+    
             state = torch.Tensor(batch_states).to(device)
             next_state = torch.Tensor(batch_next_states).to(device)
             action = torch.Tensor(batch_actions).to(device)
             reward = torch.Tensor(batch_rewards).to(device)
             done = torch.Tensor(batch_dones).to(device)
-
+    
             # 使用Actor目标网络获取下一个状态的动作
             next_action = self.actor_target(next_state)
-
+    
             # 给动作添加噪声
             noise = torch.Tensor(batch_actions).data.normal_(0, policy_noise).to(device)
             noise = noise.clamp(-noise_clip, noise_clip)
             next_action = (next_action + noise).clamp(-self.max_action, self.max_action)
-
+    
+            # 打印应用噪声后的下一步动作
+            print(f"Batch {it}, Next Action (with noise): {next_action.cpu().detach().numpy()}")
+    
             # 使用Critic目标网络计算下一个状态-动作对的Q值
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
-
+    
             # 选择较小的Q值
             target_Q = torch.min(target_Q1, target_Q2)
             av_Q += torch.mean(target_Q)
             max_Q = max(max_Q, torch.max(target_Q))
-
+    
+            # 打印目标Q值
+            print(f"Batch {it}, Target Q1: {target_Q1.cpu().detach().numpy()}")
+            print(f"Batch {it}, Target Q2: {target_Q2.cpu().detach().numpy()}")
+            print(f"Batch {it}, Min Target Q: {target_Q.cpu().detach().numpy()}")
+    
             # 使用贝尔曼方程计算目标Q值
             target_Q = reward + ((1 - done) * discount * target_Q).detach()
-
+    
+            # 打印贝尔曼更新后的目标Q值
+            print(f"Batch {it}, Bellman Updated Target Q: {target_Q.cpu().detach().numpy()}")
+    
             # 使用当前Critic网络计算当前Q值
             current_Q1, current_Q2 = self.critic(state, action)
-
+    
+            # 打印当前的Q值
+            print(f"Batch {it}, Current Q1: {current_Q1.cpu().detach().numpy()}")
+            print(f"Batch {it}, Current Q2: {current_Q2.cpu().detach().numpy()}")
+    
             # 计算当前Q值和目标Q值之间的损失
             loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
-
+    
+            # 打印损失值
+            print(f"Batch {it}, Loss: {loss.item()}")
+    
             # 进行梯度下降优化Critic网络
             self.critic_optimizer.zero_grad()
             loss.backward()
             self.critic_optimizer.step()
-
+    
+            # 打印Critic网络参数的梯度
+            for name, param in self.critic.named_parameters():
+                if param.grad is not None:
+                    print(f"Critic Param {name} Gradient: {param.grad.norm().item()}")
+    
             # 每隔policy_freq次更新Actor网络
             if it % policy_freq == 0:
                 actor_grad, _ = self.critic(state, self.actor(state))
@@ -185,7 +216,12 @@ class TD3(object):
                 self.actor_optimizer.zero_grad()
                 actor_grad.backward()
                 self.actor_optimizer.step()
-
+    
+                # 打印Actor网络的梯度
+                for name, param in self.actor.named_parameters():
+                    if param.grad is not None:
+                        print(f"Actor Param {name} Gradient: {param.grad.norm().item()}")
+    
                 # 使用软更新更新Actor目标网络参数
                 for param, target_param in zip(
                     self.actor.parameters(), self.actor_target.parameters()
@@ -193,7 +229,7 @@ class TD3(object):
                     target_param.data.copy_(
                         tau * param.data + (1 - tau) * target_param.data
                     )
-
+    
                 # 使用软更新更新Critic目标网络参数
                 for param, target_param in zip(
                     self.critic.parameters(), self.critic_target.parameters()
@@ -201,15 +237,21 @@ class TD3(object):
                     target_param.data.copy_(
                         tau * param.data + (1 - tau) * target_param.data
                     )
-
+    
             av_loss += loss
-
+    
         self.iter_count += 1
-
-        # 将损失和Q值写入TensorBoard
+    
+        # 将损失和Q值写入TensorBoard，并打印信息
         self.writer.add_scalar("loss", av_loss / iterations, self.iter_count)
+        print(f"Iteration {self.iter_count}, Average Loss: {av_loss / iterations}")
+    
         self.writer.add_scalar("Av. Q", av_Q / iterations, self.iter_count)
+        print(f"Iteration {self.iter_count}, Average Q: {av_Q / iterations}")
+    
         self.writer.add_scalar("Max. Q", max_Q, self.iter_count)
+        print(f"Iteration {self.iter_count}, Max Q: {max_Q}")
+
 
     # 保存模型
     def save(self, filename, directory):
@@ -289,12 +331,14 @@ epoch = 1
 count_rand_actions = 0
 random_action = []
 
-# 开始训练循环
+
+# Begin the training loop with more detailed print statements
 while timestep < max_timesteps:
 
-    # 在回合结束时
+    # 回合结束时打印回合信息
     if done:
         if timestep != 0:
+            # 在回合结束时训练网络
             network.train(
                 replay_buffer,
                 episode_timesteps,
@@ -306,8 +350,13 @@ while timestep < max_timesteps:
                 policy_freq,
             )
 
+            # 打印当前回合的累计奖励和步数
+            print(f"Episode {episode_num} finished with reward: {episode_reward}, in {episode_timesteps} steps.")
+            print(f"Total timesteps: {timestep}, Episodes completed: {episode_num}")
+
+        # 每隔一定的时间间隔进行评估并保存模型
         if timesteps_since_eval >= eval_freq:
-            print("验证中")
+            print(f"Validating at timestep {timestep}")
             timesteps_since_eval %= eval_freq
             evaluations.append(
                 evaluate(network=network, epoch=epoch, eval_episodes=eval_ep)
@@ -316,9 +365,11 @@ while timestep < max_timesteps:
             np.save("./results/%s" % (file_name), evaluations)
             epoch += 1
 
-        state = env.reset()  # 重置环境
+        # 重置环境，开始新的回合
+        state = env.reset()
         done = False
 
+        # 重置回合奖励、步数等信息
         episode_reward = 0
         episode_timesteps = 0
         episode_num += 1
@@ -352,7 +403,10 @@ while timestep < max_timesteps:
     next_state, reward, done, target = env.step(a_in)  # 执行动作
     done_bool = 0 if episode_timesteps + 1 == max_ep else int(done)
     done = 1 if episode_timesteps + 1 == max_ep else int(done)
-    episode_reward += reward
+    episode_reward += reward  # 累加回合奖励
+
+    # 打印当前步骤的状态、动作、奖励、是否结束
+    print(f"Timestep {timestep}: Action: {action}, Reward: {reward}, Done: {done_bool}")
 
     # 保存元组到经验回放缓冲区
     replay_buffer.add(state, action, reward, done_bool, next_state)
@@ -368,3 +422,4 @@ evaluations.append(evaluate(network=network, epoch=epoch, eval_episodes=eval_ep)
 if save_model:
     network.save("%s" % file_name, directory="./models")
 np.save("./results/%s" % file_name, evaluations)
+
