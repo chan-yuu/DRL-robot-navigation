@@ -1,3 +1,10 @@
+# description
+目前直接使用一个统一的功能包来管理整个程序了：
+放在了branch v2.0中，main版本当前不再使用
+
+
+
+
 # DRL-robot-navigation
 
 
