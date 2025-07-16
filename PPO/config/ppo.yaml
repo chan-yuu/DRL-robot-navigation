@@ -1,0 +1,92 @@
+# 多环境配置
+num_envs: 8  # 环境数量，建议根据CPU核心数调整
+use_subproc: true  # 是否使用子进程（推荐）
+
+# Velodyne环境PPO训练配置
+environment_dim: 20  # 激光雷达离散化维度
+max_episode_steps: 1000  # 每个回合的最大步数
+
+# 训练参数
+total_timesteps: 1000000  # 总训练步数
+save_freq: 100000  # 模型保存频率 如果使用多env配置,那么就会变成num_envs*save_freq
+
+# PPO算法参数
+learning_rate: 0.0003  # 学习率 (！将3e-4改为0.0003 )
+n_steps: 8192  # 每次更新收集的步数
+batch_size: 64  # 批次大小
+n_epochs: 10  # 每次更新的训练轮数
+gamma: 0.99  # 折扣因子
+gae_lambda: 0.95  # GAE lambda参数
+clip_range: 0.2  # PPO裁剪范围
+clip_range_vf: null  # 价值函数裁剪范围（null表示不裁剪）
+ent_coef: 0.0  # 熵系数
+vf_coef: 0.5  # 价值函数损失系数
+max_grad_norm: 0.5  # 梯度裁剪
+target_kl: null  # 目标KL散度（null表示不使用）
+
+# 神经网络结构
+net_arch:
+  pi: [256, 256]  # 策略网络结构
+  vf: [256, 256]  # 价值网络结构
+activation_fn: "tanh"  # 激活函数: tanh, relu, elu, leaky_relu
+
+# 学习率调度
+use_lr_schedule: true  # 是否使用学习率调度
+lr_schedule: "linear"  # 学习率调度类型: linear, constant
+
+# 环境参数
+use_normalize: true  # 是否使用观测归一化
+normalize_advantage: true  # 是否归一化优势函数
+
+# 日志和监控
+verbose: 1  # 详细程度 (0: 无输出, 1: 信息, 2: 调试)
+log_interval: 1  # 日志输出间隔
+progress_bar: true  # 是否显示进度条
+tensorboard_log: true  # 是否启用TensorBoard日志
+
+# 随机种子
+seed: 42  # 随机种子，设为null则使用随机种子
+
+# 设备设置
+device: "auto"  # 设备选择: auto, cpu, cuda
+
+# 高级参数
+use_sde: false  # 是否使用状态依赖探索
+sde_sample_freq: -1  # SDE采样频率
+stats_window_size: 100  # 统计窗口大小
+
+# ================= 评估参数 =================
+evaluation:
+  # 基本评估配置
+  num_eval_episodes: 100  # 评估回合数
+  eval_envs: 2  # 评估环境数量
+  use_eval_subproc: true  # 评估是否使用子进程
+  
+  # 模型加载配置
+  model_path: null  # 要评估的模型路径，null表示使用最新模型
+  load_vec_normalize: true  # 是否加载VecNormalize参数
+  
+  # 评估行为配置
+  deterministic: true  # 是否使用确定性策略
+  render: false  # 是否渲染环境
+  save_video: false  # 是否保存视频
+  video_length: 1000  # 视频长度（步数）
+  
+  # 统计和保存
+  save_results: true  # 是否保存评估结果
+  results_dir: "evaluation_results"  # 评估结果保存目录
+  detailed_stats: true  # 是否保存详细统计信息
+  
+  # 评估指标
+  metrics:
+    - "success_rate"  # 成功率
+    - "collision_rate"  # 碰撞率
+    - "average_reward"  # 平均奖励
+    - "episode_length"  # 回合长度
+    - "goal_distance"  # 到目标的距离
+    - "completion_time"  # 完成时间
+  
+  # 可视化配置
+  plot_results: true  # 是否绘制结果图表
+  save_plots: true  # 是否保存图表
+  show_plots: false  # 是否显示图表
